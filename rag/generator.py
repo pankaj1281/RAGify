@@ -6,6 +6,7 @@ to produce a grounded, citation-aware answer.
 
 import logging
 import time
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 from langchain_core.documents import Document
@@ -25,6 +26,11 @@ _USER_TEMPLATE = (
     "Context:\n{context}\n\n"
     "Question: {question}\n\n"
     "Answer:"
+)
+
+_FALLBACK_CONTEXT_PREVIEW_CHARS = 500
+_FALLBACK_UNAVAILABLE_MESSAGE = (
+    "Generated answer is unavailable, so returning retrieved context preview."
 )
 
 
@@ -88,14 +94,17 @@ class Generator:
             try:
                 answer = self._call_openai(question, context)
             except Exception as exc:
-                logger.warning(
-                    "OpenAI generation failed (%s); using fallback response", exc
-                )
-                answer = self._fallback_answer(
-                    question=question,
-                    context=context,
-                    reason=f"OpenAI request failed: {exc}",
-                )
+                if self._is_openai_api_error(exc):
+                    logger.warning(
+                        "OpenAI generation failed (%s); using fallback response", exc
+                    )
+                    answer = self._fallback_answer(
+                        question=question,
+                        context=context,
+                        reason=f"OpenAI request failed: {exc}",
+                    )
+                else:
+                    raise
         else:
             logger.warning(
                 "No OpenAI API key configured – using fallback stub response"
@@ -169,11 +178,52 @@ class Generator:
             raise
 
     @staticmethod
-    def _fallback_answer(question: str, context: str, reason: str) -> str:
+    def _is_openai_api_error(exc: Exception) -> bool:
+        """Return True for OpenAI client/API errors, False if types are unavailable."""
+        return isinstance(exc, Generator._openai_error_types())
+
+    @staticmethod
+    @lru_cache(maxsize=1)
+    def _openai_error_types() -> tuple[type[Exception], ...]:
+        """Load and cache OpenAI exception classes used for fallback decisions."""
+        try:
+            from openai import (
+                APIConnectionError,
+                APIError,
+                APITimeoutError,
+                AuthenticationError,
+                BadRequestError,
+                ConflictError,
+                InternalServerError,
+                NotFoundError,
+                PermissionDeniedError,
+                RateLimitError,
+                UnprocessableEntityError,
+            )
+        except (ImportError, ModuleNotFoundError):
+            return tuple()
+        return (
+            APIConnectionError,
+            APIError,
+            APITimeoutError,
+            AuthenticationError,
+            BadRequestError,
+            ConflictError,
+            InternalServerError,
+            NotFoundError,
+            PermissionDeniedError,
+            RateLimitError,
+            UnprocessableEntityError,
+        )
+
+    @staticmethod
+    def _fallback_answer(
+        question: str, context: str, reason: str = "OpenAI response unavailable."
+    ) -> str:
         """Return a stub answer without calling an LLM (used when no API key)."""
         return (
             f"{reason}\n"
-            "Generated answer is unavailable, so returning retrieved context preview.\n"
+            f"{_FALLBACK_UNAVAILABLE_MESSAGE}\n"
             f"Question: {question}\n\n"
-            f"Context preview:\n{context[:500]}"
+            f"Context preview:\n{context[:_FALLBACK_CONTEXT_PREVIEW_CHARS]}"
         )
