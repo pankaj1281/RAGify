@@ -19,7 +19,7 @@ from app.core.exceptions import (
     value_error_handler,
 )
 from app.core.logging import configure_logging
-from app.routes import health_router, ingest_router, query_router
+from app.routes import health_router, ingest_router, query_router, ui_router
 from app.services.ingestion_service import IngestionService
 from app.services.query_service import QueryService
 from config.settings import get_settings
@@ -133,6 +133,7 @@ def create_app() -> FastAPI:
     app.add_exception_handler(Exception, generic_error_handler)
 
     # Routers
+    app.include_router(ui_router)
     app.include_router(health_router)
     app.include_router(ingest_router)
     app.include_router(query_router)

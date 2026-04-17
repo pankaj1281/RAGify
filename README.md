@@ -83,7 +83,28 @@ cp .env.example .env
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-The API docs are available at <http://localhost:8000/docs>.
+After startup:
+
+* Home page (with upload form): <http://localhost:8000/>
+* Interactive API docs (Swagger): <http://localhost:8000/docs>
+
+### 4 · Upload files and ask questions
+
+You can use either the **home page** or **Swagger UI**.
+
+#### Option A: Home page (easy)
+
+1. Open <http://localhost:8000/>
+2. Use **Upload documents** and select one or more files (`.pdf`, `.txt`, `.docx`)
+3. Click **Upload & Ingest**
+4. Use the **Ask a question** box and submit your query
+
+#### Option B: Swagger UI
+
+1. Open <http://localhost:8000/docs>
+2. Expand `POST /ingest/` and click **Try it out**
+3. Click **Choose Files**, select files, then **Execute**
+4. Expand `GET /query/`, provide `q`, then **Execute**
 
 ---
 
