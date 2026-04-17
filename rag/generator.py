@@ -85,12 +85,26 @@ class Generator:
 
         start = time.perf_counter()
         if self._api_key:
-            answer = self._call_openai(question, context)
+            try:
+                answer = self._call_openai(question, context)
+            except Exception as exc:
+                logger.warning(
+                    "OpenAI generation failed (%s); using fallback response", exc
+                )
+                answer = self._fallback_answer(
+                    question=question,
+                    context=context,
+                    reason=f"OpenAI request failed: {exc}",
+                )
         else:
             logger.warning(
                 "No OpenAI API key configured – using fallback stub response"
             )
-            answer = self._fallback_answer(question, context)
+            answer = self._fallback_answer(
+                question=question,
+                context=context,
+                reason="No OpenAI API key is configured.",
+            )
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
 
         logger.info(
@@ -155,9 +169,11 @@ class Generator:
             raise
 
     @staticmethod
-    def _fallback_answer(question: str, context: str) -> str:
+    def _fallback_answer(question: str, context: str, reason: str) -> str:
         """Return a stub answer without calling an LLM (used when no API key)."""
         return (
-            "No OpenAI API key is configured. "
-            "The retrieved context is:\n\n" + context[:500]
+            f"{reason}\n"
+            "Generated answer is unavailable, so returning retrieved context preview.\n"
+            f"Question: {question}\n\n"
+            f"Context preview:\n{context[:500]}"
         )
