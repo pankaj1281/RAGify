@@ -103,7 +103,7 @@ You can use either the **home page** or **Swagger UI**.
 
 1. Open <http://localhost:8000/docs>
 2. Expand `POST /ingest/` and click **Try it out**
-3. Click **Choose Files** (this is the upload file option), select files, then **Execute**
+3. Click **Choose Files**, select files, then **Execute**
 4. Expand `GET /query/`, provide `q`, then **Execute**
 
 ---

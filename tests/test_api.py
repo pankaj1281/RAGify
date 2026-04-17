@@ -124,7 +124,7 @@ class TestUIEndpoint:
 
     def test_home_has_upload_option(self, client) -> None:
         """Home page should include a file upload input."""
-        c, _, __, ___ = client
+        c, *_ = client
         response = c.get("/")
         assert response.status_code == 200
         text = response.text

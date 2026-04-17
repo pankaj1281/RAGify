@@ -5,11 +5,7 @@ from fastapi.responses import HTMLResponse
 
 router = APIRouter(tags=["UI"])
 
-
-@router.get("/", response_class=HTMLResponse)
-async def home() -> str:
-    """Return a minimal HTML page with upload and query forms."""
-    return """
+_HOME_PAGE_HTML = """
 <!doctype html>
 <html lang="en">
   <head>
@@ -45,3 +41,9 @@ async def home() -> str:
   </body>
 </html>
 """
+
+
+@router.get("/", response_class=HTMLResponse)
+async def home() -> str:
+    """Return a minimal HTML page with upload and query forms."""
+    return _HOME_PAGE_HTML
