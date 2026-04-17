@@ -93,7 +93,7 @@ def client() -> Generator:
         generic_error_handler,
         value_error_handler,
     )
-    from app.routes import health_router, ingest_router, query_router
+    from app.routes import health_router, ingest_router, query_router, ui_router
     from config.settings import get_settings
 
     settings = get_settings()
@@ -105,12 +105,31 @@ def client() -> Generator:
     test_app.add_exception_handler(ValueError, value_error_handler)  # type: ignore[arg-type]
     test_app.add_exception_handler(DocumentNotFoundError, document_not_found_handler)  # type: ignore[arg-type]
     test_app.add_exception_handler(Exception, generic_error_handler)
+    test_app.include_router(ui_router)
     test_app.include_router(health_router)
     test_app.include_router(ingest_router)
     test_app.include_router(query_router)
 
     with TestClient(test_app, raise_server_exceptions=False) as c:
         yield c, mock_vector_store, mock_query_svc, mock_ingestion_svc
+
+
+# ---------------------------------------------------------------------------
+# UI endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestUIEndpoint:
+    """Tests for GET /."""
+
+    def test_home_has_upload_option(self, client) -> None:
+        """Home page should include a file upload input."""
+        c, _, __, ___ = client
+        response = c.get("/")
+        assert response.status_code == 200
+        text = response.text
+        assert "type=\"file\"" in text
+        assert "name=\"files\"" in text
 
 
 # ---------------------------------------------------------------------------
