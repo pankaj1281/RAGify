@@ -27,7 +27,7 @@ _HOME_PAGE_HTML = """
 
     <form action="/ingest/" method="post" enctype="multipart/form-data">
       <label for="files">Upload documents (PDF, TXT, DOCX)</label>
-      <input id="files" name="files" type="file" multiple required />
+      <input id="files" name="files" type="file" aria-label="Upload documents" multiple required />
       <button type="submit">Upload & Ingest</button>
     </form>
 
