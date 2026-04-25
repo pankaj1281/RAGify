@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = False
 
-    # LLM provider: "ollama" (free, local), "groq" (free API), or "openai"
+    # LLM provider: "ollama" (free, local), "groq" (free API), "nvidia" (free API), or "openai"
     llm_provider: str = "ollama"
 
     # OpenAI
@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-3.5-turbo"
     openai_max_tokens: int = 512
     openai_temperature: float = 0.2
+
+    # NVIDIA (free API – https://build.nvidia.com)
+    nvidia_api_key: str = ""
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
+    nvidia_model: str = "meta/llama3-70b-instruct"
 
     # Ollama (free, local – https://ollama.com)
     ollama_base_url: str = "http://localhost:11434/v1"
