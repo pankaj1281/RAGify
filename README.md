@@ -2,7 +2,7 @@
 
 A **production-grade Retrieval-Augmented Generation (RAG)** system built with Python, FastAPI, LangChain, SentenceTransformers, and FAISS. Upload your documents (PDF, TXT, DOCX) and query them with an LLM to get accurate, context-aware answers with source citations.
 
-> **No paid API key required.** The default configuration uses [Ollama](https://ollama.com) for completely free, local LLM inference. Groq (free cloud API) and OpenAI are also supported.
+> **No paid API key required.** The default configuration uses [Ollama](https://ollama.com) for completely free, local LLM inference. Groq and NVIDIA (free cloud APIs) and OpenAI are also supported.
 
 ---
 
@@ -59,7 +59,7 @@ RAGify/
 
 ## 🆓 Free LLM Options
 
-RAGify supports three LLM providers. Select one with the `LLM_PROVIDER` environment variable.
+RAGify supports four LLM providers. Select one with the `LLM_PROVIDER` environment variable.
 
 ### Option 1 – Ollama (completely free, local) ✅ *default*
 
@@ -98,7 +98,21 @@ GROQ_API_KEY=your_groq_api_key_here
 GROQ_MODEL=llama3-8b-8192   # or mixtral-8x7b-32768, gemma-7b-it
 ```
 
-### Option 3 – OpenAI (paid)
+### Option 3 – NVIDIA (free cloud API)
+
+OpenAI-compatible cloud inference powered by NVIDIA NIM — free API key, no credit card needed.
+
+1. Create a free account at <https://build.nvidia.com>
+2. Generate an API key
+3. Set in `.env`:
+
+```env
+LLM_PROVIDER=nvidia
+NVIDIA_API_KEY=your_nvidia_api_key_here
+NVIDIA_MODEL=meta/llama3-70b-instruct   # or mistralai/mistral-7b-instruct-v0.3, etc.
+```
+
+### Option 4 – OpenAI (paid)
 
 ```env
 LLM_PROVIDER=openai
@@ -277,11 +291,14 @@ All settings are controlled via environment variables (see `.env.example`):
 
 | Variable               | Default                    | Description                                      |
 |------------------------|----------------------------|--------------------------------------------------|
-| `LLM_PROVIDER`         | `ollama`                   | LLM backend: `ollama`, `groq`, or `openai`       |
+| `LLM_PROVIDER`         | `ollama`                   | LLM backend: `ollama`, `groq`, `nvidia`, or `openai` |
 | `OLLAMA_BASE_URL`      | `http://localhost:11434/v1`| Ollama API base URL                              |
 | `OLLAMA_MODEL`         | `llama2`                   | Ollama model name                                |
 | `GROQ_API_KEY`         | *(empty)*                  | Groq API key (free at console.groq.com)          |
 | `GROQ_MODEL`           | `llama3-8b-8192`           | Groq model name                                  |
+| `NVIDIA_API_KEY`       | *(empty)*                  | NVIDIA API key (free at build.nvidia.com)        |
+| `NVIDIA_BASE_URL`      | `https://integrate.api.nvidia.com/v1` | NVIDIA NIM API base URL             |
+| `NVIDIA_MODEL`         | `meta/llama3-70b-instruct` | NVIDIA model name                                |
 | `OPENAI_API_KEY`       | *(empty)*                  | OpenAI API key (paid)                            |
 | `OPENAI_MODEL`         | `gpt-3.5-turbo`            | OpenAI model name                                |
 | `OPENAI_MAX_TOKENS`    | `512`                      | Max tokens in generated answer                   |
@@ -352,7 +369,7 @@ FastAPI (app/main.py)
                └──► Generator.generate()
                         │
                         ▼
-                    LLM Provider (Ollama / Groq / OpenAI)
+                    LLM Provider (Ollama / Groq / NVIDIA / OpenAI)
                         │
                         ▼
                     answer + citations
@@ -366,6 +383,7 @@ FastAPI (app/main.py)
 |---------|--------|---------|
 | Free LLM (Ollama) | ✅ | Local inference, no API key, no cost |
 | Free LLM (Groq) | ✅ | Fast cloud inference, free API key |
+| Free LLM (NVIDIA) | ✅ | NVIDIA NIM cloud inference, free API key |
 | LRU query caching | ✅ | Bounded in-memory cache in `RAGPipeline` |
 | Query rewriting | ✅ | `?rewrite=true` — LLM rewrites query before retrieval |
 | Hybrid retrieval | ✅ | `?hybrid=true` — BM25 + dense vector weighted combination |
