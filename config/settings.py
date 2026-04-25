@@ -30,7 +30,6 @@ class Settings(BaseSettings):
     openai_temperature: float = 0.2
 
     # NVIDIA (free API – https://build.nvidia.com)
-    nvidia_api_key: str = ""
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     nvidia_model: str = "meta/llama3-70b-instruct"
 

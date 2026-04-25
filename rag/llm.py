@@ -17,6 +17,23 @@ _MODEL = "meta/llama3-70b-instruct"
 _MAX_TOKENS = 512
 _TEMPERATURE = 0.2
 
+# Module-level cached client; created once when the API key is first needed.
+_client: OpenAI | None = None
+
+
+def _get_client() -> OpenAI:
+    """Return a cached OpenAI client configured for the NVIDIA endpoint."""
+    global _client
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        raise ValueError(
+            "OPENAI_API_KEY is not set. "
+            "Set it in your environment or .env file."
+        )
+    if _client is None:
+        _client = OpenAI(api_key=api_key, base_url=_BASE_URL)
+    return _client
+
 
 def generate_answer(prompt: str) -> str:
     """Call the NVIDIA API and return the generated answer.
@@ -36,14 +53,7 @@ def generate_answer(prompt: str) -> str:
         Exception: Re-raises any error returned by the API so callers can
             handle or log it as appropriate.
     """
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        raise ValueError(
-            "OPENAI_API_KEY is not set. "
-            "Set it in your environment or .env file."
-        )
-
-    client = OpenAI(api_key=api_key, base_url=_BASE_URL)
+    client = _get_client()
     try:
         response = client.chat.completions.create(
             model=_MODEL,
@@ -51,7 +61,8 @@ def generate_answer(prompt: str) -> str:
             max_tokens=_MAX_TOKENS,
             temperature=_TEMPERATURE,
         )
-        return response.choices[0].message.content.strip()
+        content = response.choices[0].message.content
+        return (content or "").strip()
     except Exception as exc:
         logger.error("NVIDIA API call failed: %s", exc)
         raise
