@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = False
 
-    # LLM provider: "ollama" (free, local), "groq" (free API), "nvidia" (free API), or "openai"
-    llm_provider: str = "ollama"
+    # LLM provider: "nvidia" (free API), "groq" (free API), or "openai"
+    llm_provider: str = "nvidia"
 
     # OpenAI
     openai_api_key: str = ""
@@ -33,10 +33,6 @@ class Settings(BaseSettings):
     nvidia_api_key: str = ""
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     nvidia_model: str = "meta/llama3-70b-instruct"
-
-    # Ollama (free, local – https://ollama.com)
-    ollama_base_url: str = "http://localhost:11434/v1"
-    ollama_model: str = "llama2"
 
     # Groq (free API – https://console.groq.com)
     groq_api_key: str = ""

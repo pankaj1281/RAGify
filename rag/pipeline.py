@@ -194,7 +194,7 @@ class RAGPipeline:
                 rewritten = response.choices[0].message.content.strip()
                 return rewritten if rewritten else question
 
-            # openai or ollama (both use the OpenAI-compatible client)
+            # openai or nvidia use the OpenAI-compatible client
             from openai import OpenAI
 
             kwargs: dict = {"api_key": self._generator._api_key}

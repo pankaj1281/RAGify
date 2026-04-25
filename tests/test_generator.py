@@ -58,7 +58,7 @@ class TestGenerator:
     def test_nvidia_provider_initializes_with_correct_settings(self, monkeypatch) -> None:
         """Generator should use NVIDIA base URL and model when provider is 'nvidia'."""
         monkeypatch.setenv("LLM_PROVIDER", "nvidia")
-        monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test-key")
+        monkeypatch.setenv("OPENAI_API_KEY", "nvapi-test-key")
         monkeypatch.setenv("NVIDIA_MODEL", "meta/llama3-70b-instruct")
         monkeypatch.setenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
 
@@ -77,9 +77,9 @@ class TestGenerator:
         get_settings.cache_clear()
 
     def test_nvidia_raises_without_api_key(self, monkeypatch) -> None:
-        """_call_nvidia should raise ValueError when NVIDIA_API_KEY is missing."""
+        """_call_nvidia should raise ValueError when OPENAI_API_KEY is missing."""
         monkeypatch.setenv("LLM_PROVIDER", "nvidia")
-        monkeypatch.setenv("NVIDIA_API_KEY", "")
+        monkeypatch.setenv("OPENAI_API_KEY", "")
 
         from config.settings import get_settings
         get_settings.cache_clear()
