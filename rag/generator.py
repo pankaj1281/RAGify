@@ -5,12 +5,10 @@ provider to produce a grounded, citation-aware answer.
 
 Supported providers
 -------------------
-* ``ollama``  – Free, local LLMs via Ollama (https://ollama.com).
-                No API key required. Default provider.
+* ``nvidia``  – Free NVIDIA cloud API (https://build.nvidia.com).
+                Requires ``OPENAI_API_KEY``. Default provider.
 * ``groq``    – Free cloud inference via Groq (https://console.groq.com).
                 Requires ``GROQ_API_KEY``.
-* ``nvidia``  – Free NVIDIA cloud API (https://build.nvidia.com).
-                Requires ``NVIDIA_API_KEY``. OpenAI-compatible endpoint.
 * ``openai``  – OpenAI ChatCompletion (https://platform.openai.com).
                 Requires ``OPENAI_API_KEY``.
 """
@@ -50,9 +48,8 @@ class Generator:
 
     Selects the LLM backend from the ``LLM_PROVIDER`` setting:
 
-    * ``ollama``  – free local Ollama server (default, no API key needed).
+    * ``nvidia``  – free NVIDIA cloud API (default, requires ``OPENAI_API_KEY``).
     * ``groq``    – free Groq cloud API (requires ``GROQ_API_KEY``).
-    * ``nvidia``  – free NVIDIA cloud API (requires ``NVIDIA_API_KEY``).
     * ``openai``  – paid OpenAI API (requires ``OPENAI_API_KEY``).
 
     Falls back to a simple context-extraction stub when the selected provider
@@ -78,17 +75,13 @@ class Generator:
         )
 
         # Resolve the model name and credentials per provider
-        if self._provider == "ollama":
-            self._model = model or settings.ollama_model
-            self._api_key = "ollama"  # Ollama accepts any non-empty string
-            self._base_url = settings.ollama_base_url
-        elif self._provider == "groq":
+        if self._provider == "groq":
             self._model = model or settings.groq_model
             self._api_key = settings.groq_api_key
             self._base_url = None
         elif self._provider == "nvidia":
             self._model = model or settings.nvidia_model
-            self._api_key = settings.nvidia_api_key
+            self._api_key = settings.openai_api_key
             self._base_url = settings.nvidia_base_url
         else:  # openai (default fallback)
             self._provider = "openai"
@@ -158,11 +151,11 @@ class Generator:
             return self._call_groq(question, context)
         if self._provider == "nvidia":
             return self._call_nvidia(question, context)
-        # Both "ollama" and "openai" use the OpenAI-compatible client
+        # "openai" uses the OpenAI-compatible client
         return self._call_openai_compatible(question, context)
 
     def _call_openai_compatible(self, question: str, context: str) -> str:
-        """Call an OpenAI-compatible API (OpenAI or Ollama) and return the answer."""
+        """Call an OpenAI-compatible API and return the answer."""
         from openai import OpenAI
 
         kwargs: Dict[str, Any] = {"api_key": self._api_key}
@@ -184,7 +177,7 @@ class Generator:
 
     def _call_groq(self, question: str, context: str) -> str:
         """Call the Groq API and return the answer."""
-        if not self._api_key or self._api_key == "ollama":
+        if not self._api_key:
             raise ValueError(
                 "GROQ_API_KEY is not set. "
                 "Get a free key at https://console.groq.com"
@@ -211,13 +204,19 @@ class Generator:
         return response.choices[0].message.content.strip()
 
     def _call_nvidia(self, question: str, context: str) -> str:
-        """Call the NVIDIA API (OpenAI-compatible) and return the answer."""
+        """Call the NVIDIA API via generate_answer and return the answer."""
         if not self._api_key:
             raise ValueError(
-                "NVIDIA_API_KEY is not set. "
-                "Get a free key at https://build.nvidia.com"
+                "OPENAI_API_KEY is not set. "
+                "Set it in your environment or .env file."
             )
-        return self._call_openai_compatible(question, context)
+        from rag.llm import generate_answer
+
+        prompt = (
+            f"{_SYSTEM_PROMPT}\n\n"
+            f"{_USER_TEMPLATE.format(context=context, question=question)}"
+        )
+        return generate_answer(prompt)
 
     def _build_context(self, documents: List[Document]) -> str:
         """Concatenate document chunks into a single numbered context block."""
