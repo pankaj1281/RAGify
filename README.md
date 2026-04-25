@@ -2,6 +2,8 @@
 
 A **production-grade Retrieval-Augmented Generation (RAG)** system built with Python, FastAPI, LangChain, SentenceTransformers, and FAISS. Upload your documents (PDF, TXT, DOCX) and query them with an LLM to get accurate, context-aware answers with source citations.
 
+> **No paid API key required.** The default configuration uses [Ollama](https://ollama.com) for completely free, local LLM inference. Groq (free cloud API) and OpenAI are also supported.
+
 ---
 
 ## 📁 Project Structure
@@ -13,7 +15,8 @@ RAGify/
 │   ├── routes/
 │   │   ├── health.py         # GET  /health/
 │   │   ├── ingest.py         # POST /ingest/
-│   │   └── query.py          # GET  /query/
+│   │   ├── query.py          # GET  /query/
+│   │   └── ui.py             # GET  / (web UI with file upload)
 │   ├── services/
 │   │   ├── ingestion_service.py
 │   │   └── query_service.py
@@ -33,7 +36,7 @@ RAGify/
 │
 ├── rag/
 │   ├── retriever.py          # Dense + hybrid BM25 retrieval
-│   ├── generator.py          # OpenAI-backed answer generator
+│   ├── generator.py          # Multi-provider LLM answer generator
 │   └── pipeline.py           # End-to-end RAG pipeline w/ caching
 │
 ├── config/
@@ -54,12 +57,65 @@ RAGify/
 
 ---
 
+## 🆓 Free LLM Options
+
+RAGify supports three LLM providers. Select one with the `LLM_PROVIDER` environment variable.
+
+### Option 1 – Ollama (completely free, local) ✅ *default*
+
+Runs LLMs on your own machine — no API key, no cost, no data leaves your computer.
+
+```bash
+# 1. Install Ollama
+#    macOS / Linux: https://ollama.com/download
+#    Windows:       https://ollama.com/download/windows
+
+# 2. Pull a model (choose one)
+ollama pull llama2        # 3.8 GB – general purpose (default)
+ollama pull mistral       # 4.1 GB – great quality
+ollama pull phi3          # 2.3 GB – fast & lightweight
+ollama pull gemma2        # 5.4 GB – Google Gemma 2
+
+# 3. Start the server (usually auto-starts; run manually if needed)
+ollama serve
+
+# 4. Set in .env
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=llama2       # or mistral, phi3, gemma2, etc.
+```
+
+### Option 2 – Groq (free cloud API)
+
+Fast cloud inference with a **free tier** — no credit card needed.
+
+1. Create a free account at <https://console.groq.com>
+2. Generate an API key
+3. Set in `.env`:
+
+```env
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama3-8b-8192   # or mixtral-8x7b-32768, gemma-7b-it
+```
+
+### Option 3 – OpenAI (paid)
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-3.5-turbo
+```
+
+> **Note:** Embeddings always run locally via SentenceTransformers (`all-MiniLM-L6-v2`). No embedding API cost regardless of the LLM provider chosen.
+
+---
+
 ## ⚡ Quick Start
 
 ### Prerequisites
 
 * Python 3.10+
-* An OpenAI API key (optional – works without one, but answers will be stubs)
+* One of the free LLM options above (Ollama recommended)
 
 ### 1 · Clone & install
 
@@ -74,7 +130,8 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env and set OPENAI_API_KEY (and other values as needed)
+# Edit .env – set LLM_PROVIDER and the matching credentials
+# Default (ollama) works out of the box once Ollama is running
 ```
 
 ### 3 · Run the server
@@ -85,19 +142,18 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 After startup:
 
-* Home page (with upload form): <http://localhost:8000/>
-* Interactive API docs (Swagger): <http://localhost:8000/docs>
+* **Home page** (upload + query UI): <http://localhost:8000/>
+* **Interactive API docs** (Swagger): <http://localhost:8000/docs>
 
 ### 4 · Upload files and ask questions
-
-You can use either the **home page** or **Swagger UI**.
 
 #### Option A: Home page (easy)
 
 1. Open <http://localhost:8000/>
-2. Use **Upload documents** and select one or more files (`.pdf`, `.txt`, `.docx`)
-3. Click **Upload & Ingest**
-4. Use the **Ask a question** box and submit your query
+2. Click **"Select files"** and choose one or more files (`.pdf`, `.txt`, `.docx`)
+3. Click **"Upload & Ingest"** – the result is shown inline on the page
+4. Type a question in the **"Ask a Question"** box and press **Ask** or hit Enter
+5. The answer and source citations appear instantly below
 
 #### Option B: Swagger UI
 
@@ -105,6 +161,17 @@ You can use either the **home page** or **Swagger UI**.
 2. Expand `POST /ingest/` and click **Try it out**
 3. Click **Choose Files**, select files, then **Execute**
 4. Expand `GET /query/`, provide `q`, then **Execute**
+
+#### Option C: curl
+
+```bash
+# Upload a document
+curl -X POST http://localhost:8000/ingest/ \
+  -F "files=@my_document.pdf"
+
+# Ask a question
+curl "http://localhost:8000/query/?q=What+are+the+main+findings%3F"
+```
 
 ---
 
@@ -114,7 +181,19 @@ You can use either the **home page** or **Swagger UI**.
 # Build
 docker build -t ragify .
 
-# Run
+# Run with Ollama (point to host Ollama server)
+docker run -p 8000:8000 \
+  -e LLM_PROVIDER=ollama \
+  -e OLLAMA_BASE_URL=http://host.docker.internal:11434/v1 \
+  ragify
+
+# Run with Groq
+docker run -p 8000:8000 \
+  -e LLM_PROVIDER=groq \
+  -e GROQ_API_KEY=your_key \
+  ragify
+
+# Run with .env file
 docker run -p 8000:8000 --env-file .env ragify
 ```
 
@@ -196,20 +275,25 @@ curl "http://localhost:8000/query/?q=What+are+the+main+findings%3F&k=5"
 
 All settings are controlled via environment variables (see `.env.example`):
 
-| Variable               | Default               | Description                         |
-|------------------------|-----------------------|-------------------------------------|
-| `OPENAI_API_KEY`       | *(empty)*             | OpenAI API key                      |
-| `OPENAI_MODEL`         | `gpt-3.5-turbo`       | Chat model to use                   |
-| `OPENAI_MAX_TOKENS`    | `512`                 | Max tokens in generated answer      |
-| `OPENAI_TEMPERATURE`   | `0.2`                 | Sampling temperature                |
-| `EMBEDDING_MODEL`      | `all-MiniLM-L6-v2`   | SentenceTransformer model           |
-| `EMBEDDING_CACHE_DIR`  | `./data/embedding_cache` | Model weight cache directory    |
-| `FAISS_INDEX_PATH`     | `./data/faiss_index`  | FAISS index persistence path        |
-| `TOP_K`                | `5`                   | Default retrieval top-k             |
-| `CHUNK_SIZE`           | `500`                 | Characters per text chunk           |
-| `CHUNK_OVERLAP`        | `100`                 | Overlap characters between chunks   |
-| `LOG_LEVEL`            | `INFO`                | Logging verbosity                   |
-| `QUERY_CACHE_SIZE`     | `128`                 | In-memory LRU query cache size      |
+| Variable               | Default                    | Description                                      |
+|------------------------|----------------------------|--------------------------------------------------|
+| `LLM_PROVIDER`         | `ollama`                   | LLM backend: `ollama`, `groq`, or `openai`       |
+| `OLLAMA_BASE_URL`      | `http://localhost:11434/v1`| Ollama API base URL                              |
+| `OLLAMA_MODEL`         | `llama2`                   | Ollama model name                                |
+| `GROQ_API_KEY`         | *(empty)*                  | Groq API key (free at console.groq.com)          |
+| `GROQ_MODEL`           | `llama3-8b-8192`           | Groq model name                                  |
+| `OPENAI_API_KEY`       | *(empty)*                  | OpenAI API key (paid)                            |
+| `OPENAI_MODEL`         | `gpt-3.5-turbo`            | OpenAI model name                                |
+| `OPENAI_MAX_TOKENS`    | `512`                      | Max tokens in generated answer                   |
+| `OPENAI_TEMPERATURE`   | `0.2`                      | Sampling temperature                             |
+| `EMBEDDING_MODEL`      | `all-MiniLM-L6-v2`        | SentenceTransformer model (local, free)          |
+| `EMBEDDING_CACHE_DIR`  | `./data/embedding_cache`   | Model weight cache directory                     |
+| `FAISS_INDEX_PATH`     | `./data/faiss_index`       | FAISS index persistence path                     |
+| `TOP_K`                | `5`                        | Default retrieval top-k                          |
+| `CHUNK_SIZE`           | `500`                      | Characters per text chunk                        |
+| `CHUNK_OVERLAP`        | `100`                      | Overlap characters between chunks                |
+| `LOG_LEVEL`            | `INFO`                     | Logging verbosity                                |
+| `QUERY_CACHE_SIZE`     | `128`                      | In-memory LRU query cache size                   |
 
 ---
 
@@ -249,26 +333,29 @@ FastAPI (app/main.py)
      │                               FAISSVectorStore.save()
      │
      └──► GET /query/
-              │
-              ▼
-          QueryService
-              │
-              ▼
-          RAGPipeline
-              │
-              ├──► (optional) query rewriting via LLM
-              │
-              ├──► Retriever.retrieve() / hybrid_retrieve()
-              │        │
-              │        ▼
-              │    FAISSVectorStore.similarity_search()
-              │
-              ├──► (optional) CrossEncoder reranking
-              │
-              └──► Generator.generate()
-                       │
-                       ▼
-                   OpenAI ChatCompletion → answer + citations
+               │
+               ▼
+           QueryService
+               │
+               ▼
+           RAGPipeline
+               │
+               ├──► (optional) query rewriting via LLM
+               │
+               ├──► Retriever.retrieve() / hybrid_retrieve()
+               │        │
+               │        ▼
+               │    FAISSVectorStore.similarity_search()
+               │
+               ├──► (optional) CrossEncoder reranking
+               │
+               └──► Generator.generate()
+                        │
+                        ▼
+                    LLM Provider (Ollama / Groq / OpenAI)
+                        │
+                        ▼
+                    answer + citations
 ```
 
 ---
@@ -277,6 +364,8 @@ FastAPI (app/main.py)
 
 | Feature | Status | Details |
 |---------|--------|---------|
+| Free LLM (Ollama) | ✅ | Local inference, no API key, no cost |
+| Free LLM (Groq) | ✅ | Fast cloud inference, free API key |
 | LRU query caching | ✅ | Bounded in-memory cache in `RAGPipeline` |
 | Query rewriting | ✅ | `?rewrite=true` — LLM rewrites query before retrieval |
 | Hybrid retrieval | ✅ | `?hybrid=true` — BM25 + dense vector weighted combination |
@@ -284,6 +373,7 @@ FastAPI (app/main.py)
 | Response citations | ✅ | `sources` field in every `/query/` response |
 | Structured prompts | ✅ | "Answer ONLY using the context below" system prompt |
 | Persistent FAISS index | ✅ | Automatically saved/loaded between restarts |
+| File upload UI | ✅ | Home page with inline upload result & query answer |
 
 ---
 
@@ -294,7 +384,6 @@ FastAPI (app/main.py)
 * **Multi-tenant namespacing** – isolate documents by user/project
 * **Streaming responses** – stream LLM tokens back to the client via SSE
 * **Document metadata filters** – filter retrieval by document type or date
-* **LLaMA / Mistral support** – swap OpenAI for a local model via `llama-cpp-python`
 * **Streamlit UI** – simple front-end for non-technical users
 * **Observability** – OpenTelemetry traces and Prometheus metrics
 

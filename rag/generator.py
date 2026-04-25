@@ -1,7 +1,16 @@
 """LLM response generator module.
 
-Builds structured prompts from retrieved context and calls the OpenAI API
-to produce a grounded, citation-aware answer.
+Builds structured prompts from retrieved context and calls the configured LLM
+provider to produce a grounded, citation-aware answer.
+
+Supported providers
+-------------------
+* ``ollama``  – Free, local LLMs via Ollama (https://ollama.com).
+                No API key required. Default provider.
+* ``groq``    – Free cloud inference via Groq (https://console.groq.com).
+                Requires ``GROQ_API_KEY``.
+* ``openai``  – OpenAI ChatCompletion (https://platform.openai.com).
+                Requires ``OPENAI_API_KEY``.
 """
 
 import logging
@@ -37,12 +46,17 @@ _FALLBACK_UNAVAILABLE_MESSAGE = (
 class Generator:
     """Generates LLM answers from retrieved document context.
 
-    Uses the OpenAI ChatCompletion API by default. Falls back to a simple
-    context-extraction heuristic when no API key is configured (useful for
-    testing).
+    Selects the LLM backend from the ``LLM_PROVIDER`` setting:
+
+    * ``ollama`` – free local Ollama server (default, no API key needed).
+    * ``groq``   – free Groq cloud API (requires ``GROQ_API_KEY``).
+    * ``openai`` – paid OpenAI API (requires ``OPENAI_API_KEY``).
+
+    Falls back to a simple context-extraction stub when the selected provider
+    is unreachable or has no credentials configured.
 
     Args:
-        model: OpenAI model name (e.g. ``"gpt-3.5-turbo"``).
+        model: Model name override (provider-specific).
         max_tokens: Maximum tokens for the generated answer.
         temperature: Sampling temperature (lower = more deterministic).
     """
@@ -54,12 +68,26 @@ class Generator:
         temperature: Optional[float] = None,
     ) -> None:
         settings = get_settings()
-        self._model = model or settings.openai_model
+        self._provider = settings.llm_provider.lower()
         self._max_tokens = max_tokens or settings.openai_max_tokens
         self._temperature = (
             temperature if temperature is not None else settings.openai_temperature
         )
-        self._api_key = settings.openai_api_key
+
+        # Resolve the model name and credentials per provider
+        if self._provider == "ollama":
+            self._model = model or settings.ollama_model
+            self._api_key = "ollama"  # Ollama accepts any non-empty string
+            self._base_url = settings.ollama_base_url
+        elif self._provider == "groq":
+            self._model = model or settings.groq_model
+            self._api_key = settings.groq_api_key
+            self._base_url = None
+        else:  # openai (default fallback)
+            self._provider = "openai"
+            self._model = model or settings.openai_model
+            self._api_key = settings.openai_api_key
+            self._base_url = None
 
     def generate(
         self,
@@ -90,32 +118,20 @@ class Generator:
         sources = self._extract_sources(context_docs)
 
         start = time.perf_counter()
-        if self._api_key:
-            try:
-                answer = self._call_openai(question, context)
-            except Exception as exc:
-                if self._is_openai_api_error(exc):
-                    logger.warning(
-                        "OpenAI generation failed (%s); using fallback response", exc
-                    )
-                    answer = self._fallback_answer(
-                        question=question,
-                        context=context,
-                        reason=f"OpenAI request failed: {exc}",
-                    )
-                else:
-                    raise
-        else:
+
+        try:
+            answer = self._call_llm(question, context)
+        except Exception as exc:
             logger.warning(
-                "No OpenAI API key configured – using fallback stub response"
+                "LLM generation failed (%s); using fallback response", exc
             )
             answer = self._fallback_answer(
                 question=question,
                 context=context,
-                reason="No OpenAI API key is configured.",
+                reason=f"LLM request failed ({self._provider}): {exc}",
             )
-        latency_ms = round((time.perf_counter() - start) * 1000, 2)
 
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
         logger.info(
             "Generated answer in %.1fms for question: %.80s", latency_ms, question
         )
@@ -128,6 +144,62 @@ class Generator:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _call_llm(self, question: str, context: str) -> str:
+        """Dispatch to the configured LLM provider and return the answer."""
+        if self._provider == "groq":
+            return self._call_groq(question, context)
+        # Both "ollama" and "openai" use the OpenAI-compatible client
+        return self._call_openai_compatible(question, context)
+
+    def _call_openai_compatible(self, question: str, context: str) -> str:
+        """Call an OpenAI-compatible API (OpenAI or Ollama) and return the answer."""
+        from openai import OpenAI
+
+        kwargs: Dict[str, Any] = {"api_key": self._api_key}
+        if self._base_url:
+            kwargs["base_url"] = self._base_url
+
+        client = OpenAI(**kwargs)
+        user_message = _USER_TEMPLATE.format(context=context, question=question)
+        response = client.chat.completions.create(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+        )
+        return response.choices[0].message.content.strip()
+
+    def _call_groq(self, question: str, context: str) -> str:
+        """Call the Groq API and return the answer."""
+        if not self._api_key or self._api_key == "ollama":
+            raise ValueError(
+                "GROQ_API_KEY is not set. "
+                "Get a free key at https://console.groq.com"
+            )
+        try:
+            from groq import Groq
+        except ImportError as exc:
+            raise ImportError(
+                "The 'groq' package is required for Groq provider. "
+                "Install it with: pip install groq"
+            ) from exc
+
+        client = Groq(api_key=self._api_key)
+        user_message = _USER_TEMPLATE.format(context=context, question=question)
+        response = client.chat.completions.create(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+        )
+        return response.choices[0].message.content.strip()
 
     def _build_context(self, documents: List[Document]) -> str:
         """Concatenate document chunks into a single numbered context block."""
@@ -154,73 +226,11 @@ class Generator:
                 )
         return sources
 
-    def _call_openai(self, question: str, context: str) -> str:
-        """Call the OpenAI ChatCompletion API and return the answer text."""
-        try:
-            from openai import OpenAI
-
-            client = OpenAI(api_key=self._api_key)
-            user_message = _USER_TEMPLATE.format(
-                context=context, question=question
-            )
-            response = client.chat.completions.create(
-                model=self._model,
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message},
-                ],
-                max_tokens=self._max_tokens,
-                temperature=self._temperature,
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as exc:
-            logger.error("OpenAI API error: %s", exc)
-            raise
-
-    @staticmethod
-    def _is_openai_api_error(exc: Exception) -> bool:
-        """Return True for OpenAI client/API errors, False if types are unavailable."""
-        return isinstance(exc, Generator._openai_error_types())
-
-    @staticmethod
-    @lru_cache(maxsize=1)
-    def _openai_error_types() -> tuple[type[Exception], ...]:
-        """Load and cache OpenAI exception classes used for fallback decisions."""
-        try:
-            from openai import (
-                APIConnectionError,
-                APIError,
-                APITimeoutError,
-                AuthenticationError,
-                BadRequestError,
-                ConflictError,
-                InternalServerError,
-                NotFoundError,
-                PermissionDeniedError,
-                RateLimitError,
-                UnprocessableEntityError,
-            )
-        except (ImportError, ModuleNotFoundError):
-            return tuple()
-        return (
-            APIConnectionError,
-            APIError,
-            APITimeoutError,
-            AuthenticationError,
-            BadRequestError,
-            ConflictError,
-            InternalServerError,
-            NotFoundError,
-            PermissionDeniedError,
-            RateLimitError,
-            UnprocessableEntityError,
-        )
-
     @staticmethod
     def _fallback_answer(
-        question: str, context: str, reason: str = "OpenAI response unavailable."
+        question: str, context: str, reason: str = "LLM response unavailable."
     ) -> str:
-        """Return a stub answer without calling an LLM (used when no API key)."""
+        """Return a stub answer without calling an LLM (used on failure)."""
         return (
             f"{reason}\n"
             f"{_FALLBACK_UNAVAILABLE_MESSAGE}\n"
