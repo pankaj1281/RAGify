@@ -198,7 +198,7 @@ class RAGPipeline:
             from openai import OpenAI
 
             kwargs: dict = {"api_key": self._generator._api_key}
-            if hasattr(self._generator, "_base_url") and self._generator._base_url:
+            if self._generator._base_url:
                 kwargs["base_url"] = self._generator._base_url
             client = OpenAI(**kwargs)
             response = client.chat.completions.create(

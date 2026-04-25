@@ -175,7 +175,7 @@ class Generator:
 
     def _call_groq(self, question: str, context: str) -> str:
         """Call the Groq API and return the answer."""
-        if not self._api_key:
+        if not self._api_key or self._api_key == "ollama":
             raise ValueError(
                 "GROQ_API_KEY is not set. "
                 "Get a free key at https://console.groq.com"

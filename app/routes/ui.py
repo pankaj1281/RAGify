@@ -103,13 +103,13 @@ _HOME_PAGE_HTML = """
           if (res.ok) {
             let html = '<div class="answer-text">' + escHtml(data.answer) + '</div>';
             if (data.sources && data.sources.length) {
-              html += '<div class="sources"><strong>Sources:</strong>';
+              html += '<div class="sources"><strong>Sources:</strong><ul style="margin:0.25rem 0 0 1.2rem;padding:0">';
               data.sources.forEach(s => {
-                html += escHtml(s.source);
+                html += '<li>' + escHtml(s.source);
                 if (s.page != null) html += ' (page ' + s.page + ')';
-                html += '<br/>';
+                html += '</li>';
               });
-              html += '</div>';
+              html += '</ul></div>';
             }
             html += '<div class="meta">Latency: ' + data.latency_ms + ' ms &nbsp;|&nbsp; Chunks retrieved: ' + data.retrieved_docs + '</div>';
             resultBox.innerHTML = html;
