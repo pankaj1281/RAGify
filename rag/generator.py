@@ -217,20 +217,7 @@ class Generator:
                 "NVIDIA_API_KEY is not set. "
                 "Get a free key at https://build.nvidia.com"
             )
-        from openai import OpenAI
-
-        client = OpenAI(api_key=self._api_key, base_url=self._base_url)
-        user_message = _USER_TEMPLATE.format(context=context, question=question)
-        response = client.chat.completions.create(
-            model=self._model,
-            messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
-            ],
-            max_tokens=self._max_tokens,
-            temperature=self._temperature,
-        )
-        return response.choices[0].message.content.strip()
+        return self._call_openai_compatible(question, context)
 
     def _build_context(self, documents: List[Document]) -> str:
         """Concatenate document chunks into a single numbered context block."""

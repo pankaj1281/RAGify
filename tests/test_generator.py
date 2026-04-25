@@ -55,7 +55,7 @@ class TestGenerator:
         assert "Generated answer is unavailable" in result["answer"]
         assert result["sources"][0]["source"] == "notes.txt"
 
-    def test_nvidia_provider_uses_correct_settings(self, monkeypatch) -> None:
+    def test_nvidia_provider_initializes_with_correct_settings(self, monkeypatch) -> None:
         """Generator should use NVIDIA base URL and model when provider is 'nvidia'."""
         monkeypatch.setenv("LLM_PROVIDER", "nvidia")
         monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test-key")
