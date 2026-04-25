@@ -9,6 +9,8 @@ Supported providers
                 No API key required. Default provider.
 * ``groq``    – Free cloud inference via Groq (https://console.groq.com).
                 Requires ``GROQ_API_KEY``.
+* ``nvidia``  – Free NVIDIA cloud API (https://build.nvidia.com).
+                Requires ``NVIDIA_API_KEY``. OpenAI-compatible endpoint.
 * ``openai``  – OpenAI ChatCompletion (https://platform.openai.com).
                 Requires ``OPENAI_API_KEY``.
 """
@@ -48,9 +50,10 @@ class Generator:
 
     Selects the LLM backend from the ``LLM_PROVIDER`` setting:
 
-    * ``ollama`` – free local Ollama server (default, no API key needed).
-    * ``groq``   – free Groq cloud API (requires ``GROQ_API_KEY``).
-    * ``openai`` – paid OpenAI API (requires ``OPENAI_API_KEY``).
+    * ``ollama``  – free local Ollama server (default, no API key needed).
+    * ``groq``    – free Groq cloud API (requires ``GROQ_API_KEY``).
+    * ``nvidia``  – free NVIDIA cloud API (requires ``NVIDIA_API_KEY``).
+    * ``openai``  – paid OpenAI API (requires ``OPENAI_API_KEY``).
 
     Falls back to a simple context-extraction stub when the selected provider
     is unreachable or has no credentials configured.
@@ -83,6 +86,10 @@ class Generator:
             self._model = model or settings.groq_model
             self._api_key = settings.groq_api_key
             self._base_url = None
+        elif self._provider == "nvidia":
+            self._model = model or settings.nvidia_model
+            self._api_key = settings.nvidia_api_key
+            self._base_url = settings.nvidia_base_url
         else:  # openai (default fallback)
             self._provider = "openai"
             self._model = model or settings.openai_model
@@ -149,6 +156,8 @@ class Generator:
         """Dispatch to the configured LLM provider and return the answer."""
         if self._provider == "groq":
             return self._call_groq(question, context)
+        if self._provider == "nvidia":
+            return self._call_nvidia(question, context)
         # Both "ollama" and "openai" use the OpenAI-compatible client
         return self._call_openai_compatible(question, context)
 
@@ -189,6 +198,28 @@ class Generator:
             ) from exc
 
         client = Groq(api_key=self._api_key)
+        user_message = _USER_TEMPLATE.format(context=context, question=question)
+        response = client.chat.completions.create(
+            model=self._model,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            max_tokens=self._max_tokens,
+            temperature=self._temperature,
+        )
+        return response.choices[0].message.content.strip()
+
+    def _call_nvidia(self, question: str, context: str) -> str:
+        """Call the NVIDIA API (OpenAI-compatible) and return the answer."""
+        if not self._api_key:
+            raise ValueError(
+                "NVIDIA_API_KEY is not set. "
+                "Get a free key at https://build.nvidia.com"
+            )
+        from openai import OpenAI
+
+        client = OpenAI(api_key=self._api_key, base_url=self._base_url)
         user_message = _USER_TEMPLATE.format(context=context, question=question)
         response = client.chat.completions.create(
             model=self._model,

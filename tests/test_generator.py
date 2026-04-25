@@ -1,6 +1,6 @@
 """Tests for rag/generator.py."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from langchain_core.documents import Document
 
@@ -54,3 +54,40 @@ class TestGenerator:
 
         assert "Generated answer is unavailable" in result["answer"]
         assert result["sources"][0]["source"] == "notes.txt"
+
+    def test_nvidia_provider_uses_correct_settings(self, monkeypatch) -> None:
+        """Generator should use NVIDIA base URL and model when provider is 'nvidia'."""
+        monkeypatch.setenv("LLM_PROVIDER", "nvidia")
+        monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-test-key")
+        monkeypatch.setenv("NVIDIA_MODEL", "meta/llama3-70b-instruct")
+        monkeypatch.setenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
+
+        # Clear lru_cache so env vars are re-read
+        from config.settings import get_settings
+        get_settings.cache_clear()
+
+        generator = Generator()
+
+        assert generator._provider == "nvidia"
+        assert generator._api_key == "nvapi-test-key"
+        assert generator._base_url == "https://integrate.api.nvidia.com/v1"
+        assert generator._model == "meta/llama3-70b-instruct"
+
+        # Clean up cache
+        get_settings.cache_clear()
+
+    def test_nvidia_raises_without_api_key(self, monkeypatch) -> None:
+        """_call_nvidia should raise ValueError when NVIDIA_API_KEY is missing."""
+        monkeypatch.setenv("LLM_PROVIDER", "nvidia")
+        monkeypatch.setenv("NVIDIA_API_KEY", "")
+
+        from config.settings import get_settings
+        get_settings.cache_clear()
+
+        generator = Generator()
+        result = generator.generate("What is RAG?", _make_docs())
+
+        assert "Generated answer is unavailable" in result["answer"]
+        assert "LLM request failed" in result["answer"]
+
+        get_settings.cache_clear()
