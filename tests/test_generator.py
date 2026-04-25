@@ -1,6 +1,6 @@
 """Tests for rag/generator.py."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from langchain_core.documents import Document
 
@@ -19,37 +19,38 @@ def _make_docs() -> list[Document]:
 class TestGenerator:
     """Unit tests for generation fallback behavior."""
 
-    def test_generate_uses_openai_answer_when_available(self) -> None:
-        """Should return the model answer when OpenAI call succeeds."""
+    def test_generate_returns_llm_answer_when_call_succeeds(self) -> None:
+        """Should return the model answer when the LLM call succeeds."""
         generator = Generator()
-        generator._api_key = "test-key"
-        generator._call_openai = MagicMock(return_value="Direct model answer.")  # type: ignore[method-assign]
+        generator._call_llm = MagicMock(return_value="Direct model answer.")  # type: ignore[method-assign]
 
         result = generator.generate("What is RAG?", _make_docs())
 
         assert result["answer"] == "Direct model answer."
-        generator._call_openai.assert_called_once()
+        generator._call_llm.assert_called_once()
 
-    def test_generate_falls_back_when_openai_call_fails(self) -> None:
-        """Should return a fallback answer when OpenAI request errors out."""
+    def test_generate_falls_back_when_llm_call_fails(self) -> None:
+        """Should return a fallback answer when the LLM request errors out."""
         generator = Generator()
-        generator._api_key = "test-key"
-        generator._call_openai = MagicMock(  # type: ignore[method-assign]
-            side_effect=RuntimeError("insufficient_quota")
+        generator._call_llm = MagicMock(  # type: ignore[method-assign]
+            side_effect=RuntimeError("connection refused")
         )
-        with patch("rag.generator.Generator._openai_error_types", return_value=(RuntimeError,)):
-            result = generator.generate("What is RAG?", _make_docs())
+
+        result = generator.generate("What is RAG?", _make_docs())
 
         assert "Generated answer is unavailable" in result["answer"]
-        assert "OpenAI request failed: insufficient_quota" in result["answer"]
+        assert "LLM request failed" in result["answer"]
         assert result["sources"][0]["source"] == "notes.txt"
         assert result["latency_ms"] >= 0
 
     def test_generate_falls_back_without_api_key(self) -> None:
-        """Should return a fallback answer when no API key is configured."""
+        """Should return a fallback answer when the provider call fails due to missing key."""
         generator = Generator()
-        generator._api_key = ""
+        generator._call_llm = MagicMock(  # type: ignore[method-assign]
+            side_effect=ValueError("API key not set")
+        )
 
         result = generator.generate("What is RAG?", _make_docs())
 
-        assert "No OpenAI API key is configured." in result["answer"]
+        assert "Generated answer is unavailable" in result["answer"]
+        assert result["sources"][0]["source"] == "notes.txt"

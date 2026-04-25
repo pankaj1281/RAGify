@@ -20,11 +20,22 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = False
 
+    # LLM provider: "ollama" (free, local), "groq" (free API), or "openai"
+    llm_provider: str = "ollama"
+
     # OpenAI
     openai_api_key: str = ""
     openai_model: str = "gpt-3.5-turbo"
     openai_max_tokens: int = 512
     openai_temperature: float = 0.2
+
+    # Ollama (free, local – https://ollama.com)
+    ollama_base_url: str = "http://localhost:11434/v1"
+    ollama_model: str = "llama2"
+
+    # Groq (free API – https://console.groq.com)
+    groq_api_key: str = ""
+    groq_model: str = "llama3-8b-8192"
 
     # Embeddings
     embedding_model: str = "all-MiniLM-L6-v2"

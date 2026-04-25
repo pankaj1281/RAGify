@@ -94,7 +94,7 @@ class RAGPipeline:
 
         # Optional query rewriting
         effective_query = question
-        if rewrite and self._generator._api_key:
+        if rewrite:
             effective_query = self._rewrite_query(question)
             logger.info(
                 "Query rewritten: '%.80s' → '%.80s'", question, effective_query
@@ -164,14 +164,45 @@ class RAGPipeline:
     # ------------------------------------------------------------------
 
     def _rewrite_query(self, question: str) -> str:
-        """Rewrite a user query to improve retrieval using the LLM."""
+        """Rewrite a user query to improve retrieval using the active LLM."""
         try:
+            settings = get_settings()
+            provider = settings.llm_provider.lower()
+
+            if provider == "groq":
+                try:
+                    from groq import Groq
+                except ImportError:
+                    logger.warning("groq package not installed; skipping query rewrite")
+                    return question
+                client = Groq(api_key=self._generator._api_key)
+                response = client.chat.completions.create(
+                    model=self._generator._model,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "Rewrite the following question to make it more precise "
+                                "and retrieval-friendly. Return ONLY the rewritten question."
+                            ),
+                        },
+                        {"role": "user", "content": question},
+                    ],
+                    max_tokens=128,
+                    temperature=0.0,
+                )
+                rewritten = response.choices[0].message.content.strip()
+                return rewritten if rewritten else question
+
+            # openai or ollama (both use the OpenAI-compatible client)
             from openai import OpenAI
 
-            settings = get_settings()
-            client = OpenAI(api_key=self._generator._api_key)
+            kwargs: dict = {"api_key": self._generator._api_key}
+            if hasattr(self._generator, "_base_url") and self._generator._base_url:
+                kwargs["base_url"] = self._generator._base_url
+            client = OpenAI(**kwargs)
             response = client.chat.completions.create(
-                model=settings.openai_model,
+                model=self._generator._model,
                 messages=[
                     {
                         "role": "system",
